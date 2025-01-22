@@ -21,7 +21,7 @@ HTML_PAGE = """
             margin: 0;
         }
         .container {
-            background: white;
+            background: dark shadow;
             width: 400px;
             padding: 20px;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
