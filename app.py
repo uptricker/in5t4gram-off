@@ -31,9 +31,12 @@ def home():
 
 # Message sending page
 @app.route("/send_message", methods=["GET", "POST"])
+# Message sending page
+@app.route("/send_message", methods=["GET", "POST"])
 def send_message():
     if not logged_in:
         return "You need to login first! <a href='/'>Go to login page</a>"
+    
     if request.method == "POST":
         group_id = request.form["group_id"]
         message = request.form["message"]
@@ -49,12 +52,14 @@ def send_message():
                 messages = f.readlines()
         
         try:
+            # Send messages from file (if provided) or single message
             if messages:
                 for msg in messages:
-                    cl.direct_send(msg.strip(), [group_id])
-                    time.sleep(delay)
+                    cl.direct_send(msg.strip(), [group_id])  # Using correct API call
+                    time.sleep(delay)  # Delay between messages
             else:
-                cl.direct_send(message, [group_id])
+                cl.direct_send(message, [group_id])  # Using correct API call
+            
             return "Message(s) sent successfully!"
         except Exception as e:
             return f"Failed to send message: {e}"
@@ -68,7 +73,6 @@ def send_message():
             <input type="submit" value="Send">
         </form>
     '''
-
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
     
