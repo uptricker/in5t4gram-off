@@ -1,191 +1,126 @@
-from flask import Flask, request, render_template_string, redirect, url_for, flash
-from instagrapi import Client  # Instagram Private API library
+from flask import Flask, request, render_template, redirect, url_for
+from instagrapi import Client
 import os
 import time
 
-# Initialize Flask app
 app = Flask(__name__)
-app.secret_key = "your_secret_key"
 
-# HTML Template
-HTML_TEMPLATE = '''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>INSTAGRAM GROUP INBOX OFFLINE SERVER</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: black;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            color: red;
-        }
-        .container {
-            background-color: #ffffff;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-            max-width: 400px;
-            width: 100%;
-        }
-        h1 {
-            text-align: center;
-            color: red;
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            font-weight: bold;
-            margin: 10px 0 5px;
-            color: red;
-        }
-        input, select, button {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 15px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            font-size: 16px;
-            background-color: white;
-        }
-        input:focus, select:focus, button:focus {
-            outline: none;
-            border-color: black;
-            box-shadow: 0 0 5px rgba(255, 105, 180, 0.5);
-        }
-        button {
-            background-color: black;
-            color: red;
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        button:hover {
-            background-color: #ff69b4;
-        }
-        .message {
-            color: white;
-            font-size: 14px;
-            text-align: center;
-        }
-        .success {
-            color: green;
-            font-size: 14px;
-            text-align: center;
-        }
-        .info {
-            font-size: 12px;
-            color: #777;
-            margin-bottom: -10px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>INSTAGRAM GROUP INBOX OFFLINE SERVER</h1>
-        <form action="/" method="POST" enctype="multipart/form-data">
-            <label for="username">Instagram Username:</label>
-            <input type="text" id="username" name="username" placeholder="Enter your username" required>
+# Path to save uploaded files
+UPLOAD_FOLDER = 'uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-            <label for="password">Instagram Password:</label>
-            <input type="password" id="password" name="password" placeholder="Enter your password" required>
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-            <label for="choice">Send To:</label>
-            <select id="choice" name="choice" required>
-                <option value="inbox">Inbox</option>
-                <option value="group">Group</option>
-            </select>
 
-            <label for="target_username">Target Username (for Inbox):</label>
-            <input type="text" id="target_username" name="target_username" placeholder="Enter target username">
+@app.route('/')
+def index():
+    return '''
+        <html>
+        <head>
+            <title>Instagram Group Message Sender</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    background-color: #f4f4f9;
+                    padding: 20px;
+                    text-align: center;
+                }
+                .form-container {
+                    background-color: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                    max-width: 500px;
+                    margin: auto;
+                }
+                input, button, label {
+                    display: block;
+                    width: 100%;
+                    margin-bottom: 15px;
+                }
+                button {
+                    background-color: #007bff;
+                    color: white;
+                    padding: 10px;
+                    border: none;
+                    border-radius: 5px;
+                }
+                button:hover {
+                    background-color: #0056b3;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>Instagram Group Message Sender</h1>
+            <div class="form-container">
+                <form action="/" method="post" enctype="multipart/form-data">
+                    <label for="username">Instagram Username:</label>
+                    <input type="text" id="username" name="username" required>
+                    
+                    <label for="password">Instagram Password:</label>
+                    <input type="password" id="password" name="password" required>
+                    
+                    <label for="apiKey">API Key:</label>
+                    <input type="text" id="apiKey" name="apiKey" required>
+                    
+                    <label for="groupId">Target Group Chat ID:</label>
+                    <input type="text" id="groupId" name="groupId" required>
+                    
+                    <label for="messageFile">Upload Message File (.txt):</label>
+                    <input type="file" id="messageFile" name="messageFile" accept=".txt" required>
+                    
+                    <label for="delay">Delay (in seconds):</label>
+                    <input type="number" id="delay" name="delay" min="1" required>
+                    
+                    <label for="hatersName">Haters Name Prefix:</label>
+                    <input type="text" id="hatersName" name="hatersName" required>
+                    
+                    <button type="submit">Submit</button>
+                </form>
+            </div>
+        </body>
+        </html>
+    '''
 
-            <label for="thread_id">Thread ID (for Group):</label>
-            <input type="text" id="thread_id" name="thread_id" placeholder="Enter group thread ID">
 
-            <label for="haters_name">Haters Name:</label>
-            <input type="text" id="haters_name" name="haters_name" placeholder="Enter hater's name" required>
+@app.route('/', methods=['POST'])
+def send_messages():
+    username = request.form['username']
+    password = request.form['password']
+    api_key = request.form['apiKey']
+    group_id = request.form['groupId']
+    delay = int(request.form['delay'])
+    haters_name = request.form['hatersName']
 
-            <label for="message_file">Message File:</label>
-            <input type="file" id="message_file" name="message_file" required>
-            <p class="info">Upload a file containing messages, one per line.</p>
+    # Save the uploaded message file
+    message_file = request.files['messageFile']
+    message_file_path = os.path.join(app.config['UPLOAD_FOLDER'], message_file.filename)
+    message_file.save(message_file_path)
 
-            <label for="delay">Delay (seconds):</label>
-            <input type="number" id="delay" name="delay" placeholder="Enter delay in seconds" required>
+    # Read messages from the file
+    with open(message_file_path, 'r') as file:
+        messages = file.readlines()
 
-            <button type="submit">Send Messages</button>
-        </form>
-    </div>
-</body>
-</html>
-'''
+    # Initialize Instagram Client
+    cl = Client()
+    try:
+        cl.login(username, password)
+    except Exception as e:
+        return f"Error: Unable to login. {str(e)}"
 
-# Endpoint to render form and process requests
-@app.route("/", methods=["GET", "POST"])
-def automate_instagram():
-    if request.method == "POST":
+    # Send messages to the group chat
+    for idx, message in enumerate(messages):
         try:
-            # Get form data
-            username = request.form["username"]
-            password = request.form["password"]
-            choice = request.form["choice"]
-            target_username = request.form.get("target_username")
-            thread_id = request.form.get("thread_id")
-            haters_name = request.form["haters_name"]
-            delay = int(request.form["delay"])
-            message_file = request.files["message_file"]
-
-            # Validate message file
-            messages = message_file.read().decode("utf-8").splitlines()
-            if not messages:
-                flash("Message file is empty!", "error")
-                return redirect(url_for("automate_instagram"))
-
-            # Initialize Instagram Client
-            cl = Client()
-            cl.login(username, password)
-            flash("Login successful!", "success")
-
-            # Process messages
-            for message in messages:
-                if choice == "inbox":
-                    if not target_username:
-                        flash("Target username is required for inbox messaging.", "error")
-                        return redirect(url_for("automate_instagram"))
-
-                    # Send message to inbox
-                    user_id = cl.user_id_from_username(target_username)
-                    cl.direct_send(message, [user_id])
-                    print(f"Message sent to {target_username}: {message}")
-
-                elif choice == "group":
-                    if not thread_id:
-                        flash("Thread ID is required for group messaging.", "error")
-                        return redirect(url_for("automate_instagram"))
-
-                    # Send message to group
-                    cl.direct_send(message, [], thread_id=thread_id)
-                    print(f"Message sent to thread {thread_id}: {message}")
-
-                time.sleep(delay)
-
-            flash("All messages sent successfully!", "success")
-            return redirect(url_for("automate_instagram"))
-
+            message_content = f"{haters_name} {message.strip()}"
+            cl.direct_send(message_content, [group_id])
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Sent message {idx + 1}: {message_content}")
+            time.sleep(delay)
         except Exception as e:
-            flash(f"An error occurred: {str(e)}", "error")
-            return redirect(url_for("automate_instagram"))
+            print(f"Error sending message {idx + 1}: {str(e)}")
 
-    # Render the form
-    return render_template_string(HTML_TEMPLATE)
+    return redirect(url_for('index'))
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
 
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
             
