@@ -82,7 +82,6 @@ def upload_files():
 
     return jsonify({"status": "error", "message": "Only .txt files are allowed!"})
 
-# Run the Flask app on a specified port
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
-        
+if __name__ == "__main__":
+    # Run the Flask app on localhost at port 5000
+    app.run(host="0.0.0.0", port=5000, debug=True) 
