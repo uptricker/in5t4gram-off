@@ -4,66 +4,86 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 import time
 import os
 
 app = Flask(__name__)
 
+# Path to your ChromeDriver
+CHROMEDRIVER_PATH = "chromedriver"
+
 @app.route('/')
 def index():
     return '''
-        <!DOCTYPE html>
-        <html>
+        <html lang="en">
         <head>
-            <title>Instagram Bot</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Instagram Group Message Sender</title>
             <style>
                 body {
-                    background-color: #f0f0f0;
                     font-family: Arial, sans-serif;
+                    background-color: #f7f7f7;
+                    margin: 0;
+                    padding: 0;
                 }
                 .container {
-                    max-width: 500px;
+                    max-width: 600px;
                     margin: 50px auto;
-                    background: white;
-                    padding: 20px;
+                    background: #fff;
                     border-radius: 8px;
-                    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                    padding: 20px;
+                    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+                }
+                h2 {
+                    text-align: center;
+                    color: #333;
+                }
+                form {
+                    display: flex;
+                    flex-direction: column;
+                }
+                label {
+                    margin-bottom: 5px;
+                    color: #555;
                 }
                 input, button {
-                    width: 100%;
+                    margin-bottom: 15px;
                     padding: 10px;
-                    margin: 10px 0;
-                    border-radius: 5px;
                     border: 1px solid #ccc;
+                    border-radius: 5px;
                 }
                 button {
-                    background-color: #007bff;
+                    background: #007BFF;
                     color: white;
                     border: none;
                     cursor: pointer;
                 }
                 button:hover {
-                    background-color: #0056b3;
+                    background: #0056b3;
                 }
             </style>
         </head>
         <body>
             <div class="container">
-                <h2>Instagram Message Bot</h2>
-                <form action="/" method="POST" enctype="multipart/form-data">
-                    <label>Instagram Username:</label>
-                    <input type="text" name="username" required>
-                    <label>Instagram Password:</label>
-                    <input type="password" name="password" required>
-                    <label>Target Group Name:</label>
-                    <input type="text" name="group_name" required>
-                    <label>Messages File (.txt):</label>
-                    <input type="file" name="message_file" accept=".txt" required>
-                    <label>Delay (in seconds):</label>
-                    <input type="number" name="delay" value="5" required>
-                    <button type="submit">Start Bot</button>
+                <h2>Instagram Group Message Sender</h2>
+                <form action="/" method="post" enctype="multipart/form-data">
+                    <label for="username">Instagram Username:</label>
+                    <input type="text" id="username" name="username" required>
+                    
+                    <label for="password">Instagram Password:</label>
+                    <input type="password" id="password" name="password" required>
+                    
+                    <label for="group_id">Group Chat ID:</label>
+                    <input type="text" id="group_id" name="group_id" required>
+                    
+                    <label for="message_file">Upload Message File (Notepad - .txt):</label>
+                    <input type="file" id="message_file" name="message_file" accept=".txt" required>
+                    
+                    <label for="delay">Delay Between Messages (in seconds):</label>
+                    <input type="number" id="delay" name="delay" value="5" min="1" required>
+                    
+                    <button type="submit">Start Messaging</button>
                 </form>
             </div>
         </body>
@@ -71,56 +91,55 @@ def index():
     '''
 
 @app.route('/', methods=['POST'])
-def automate_instagram():
+def send_messages():
+    # Get form data
     username = request.form['username']
     password = request.form['password']
-    group_name = request.form['group_name']
+    group_id = request.form['group_id']
     delay = int(request.form['delay'])
+
+    # Process uploaded file
     message_file = request.files['message_file']
-    
-    # Read messages from uploaded file
     messages = message_file.read().decode().splitlines()
-    
+
     # Setup Selenium WebDriver
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Run browser in headless mode (optional)
+    chrome_options.add_argument("--headless")  # Run in headless mode (no GUI)
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
-    service = Service(executable_path="chromedriver")  # Path to ChromeDriver
-    driver = webdriver.Chrome(service=service, options=chrome_options)
+    driver = webdriver.Chrome(service=Service(CHROMEDRIVER_PATH), options=chrome_options)
 
     try:
-        # Open Instagram login page
+        # Navigate to Instagram Login
         driver.get("https://www.instagram.com/accounts/login/")
-        wait = WebDriverWait(driver, 20)
-        
+        time.sleep(3)
+
         # Log in
-        wait.until(EC.presence_of_element_located((By.NAME, "username"))).send_keys(username)
-        wait.until(EC.presence_of_element_located((By.NAME, "password"))).send_keys(password, Keys.RETURN)
-        time.sleep(5)  # Allow time for login
-
-        # Navigate to direct messages
-        driver.get("https://www.instagram.com/direct/inbox/")
-        time.sleep(5)  # Allow inbox to load
-
-        # Find the target group
-        search_box = wait.until(EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Search']")))
-        search_box.send_keys(group_name)
-        time.sleep(3)  # Allow search results to load
-        search_box.send_keys(Keys.RETURN, Keys.RETURN)  # Open the chat
+        driver.find_element(By.NAME, "username").send_keys(username)
+        driver.find_element(By.NAME, "password").send_keys(password)
+        driver.find_element(By.NAME, "password").send_keys(Keys.RETURN)
         time.sleep(5)
 
-        # Send messages from the file
+        # Navigate to group chat
+        group_chat_url = f"https://www.instagram.com/direct/t/{group_id}/"
+        driver.get(group_chat_url)
+        time.sleep(5)
+
+        # Send messages
         for message in messages:
-            text_area = wait.until(EC.presence_of_element_located((By.TAG_NAME, "textarea")))
-            text_area.send_keys(message, Keys.RETURN)
+            message_box = driver.find_element(By.TAG_NAME, "textarea")
+            message_box.send_keys(message)
+            message_box.send_keys(Keys.RETURN)
+            print(f"Message sent: {message}")
             time.sleep(delay)
 
-        return "Messages sent successfully!"
     except Exception as e:
-        return f"An error occurred: {e}"
+        print(f"Error occurred: {e}")
     finally:
         driver.quit()
 
+    return "Messages sent successfully!"
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
+        
