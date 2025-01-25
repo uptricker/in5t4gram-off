@@ -1,145 +1,120 @@
-from flask import Flask, request, render_template, redirect, url_for
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
+from flask import Flask, request, render_template, redirect, url_for, flash
+import instaloader
 import time
 import os
 
 app = Flask(__name__)
+app.secret_key = "your_secret_key"  # Replace with your own secret key
 
-# Path to your ChromeDriver
-CHROMEDRIVER_PATH = "chromedriver"
 
 @app.route('/')
 def index():
     return '''
-        <html lang="en">
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Instagram Group Message Sender</title>
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    background-color: #f7f7f7;
-                    margin: 0;
-                    padding: 0;
-                }
-                .container {
-                    max-width: 600px;
-                    margin: 50px auto;
-                    background: #fff;
-                    border-radius: 8px;
-                    padding: 20px;
-                    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-                }
-                h2 {
-                    text-align: center;
-                    color: #333;
-                }
-                form {
-                    display: flex;
-                    flex-direction: column;
-                }
-                label {
-                    margin-bottom: 5px;
-                    color: #555;
-                }
-                input, button {
-                    margin-bottom: 15px;
-                    padding: 10px;
-                    border: 1px solid #ccc;
-                    border-radius: 5px;
-                }
-                button {
-                    background: #007BFF;
-                    color: white;
-                    border: none;
-                    cursor: pointer;
-                }
-                button:hover {
-                    background: #0056b3;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h2>Instagram Group Message Sender</h2>
-                <form action="/" method="post" enctype="multipart/form-data">
-                    <label for="username">Instagram Username:</label>
-                    <input type="text" id="username" name="username" required>
-                    
-                    <label for="password">Instagram Password:</label>
-                    <input type="password" id="password" name="password" required>
-                    
-                    <label for="group_id">Group Chat ID:</label>
-                    <input type="text" id="group_id" name="group_id" required>
-                    
-                    <label for="message_file">Upload Message File (Notepad - .txt):</label>
-                    <input type="file" id="message_file" name="message_file" accept=".txt" required>
-                    
-                    <label for="delay">Delay Between Messages (in seconds):</label>
-                    <input type="number" id="delay" name="delay" value="5" min="1" required>
-                    
-                    <button type="submit">Start Messaging</button>
-                </form>
-            </div>
-        </body>
-        </html>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Instagram Group Message Sender</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f4f4f9;
+                padding: 20px;
+                margin: 0;
+            }
+            .container {
+                max-width: 600px;
+                margin: auto;
+                background: #ffffff;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            }
+            .form-control {
+                width: 100%;
+                padding: 10px;
+                margin: 10px 0;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+            }
+            .btn {
+                background-color: #007bff;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                cursor: pointer;
+                border-radius: 5px;
+            }
+            .btn:hover {
+                background-color: #0056b3;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>Instagram Group Message Sender</h2>
+            <form action="/" method="post" enctype="multipart/form-data">
+                <label for="username">Instagram Username:</label>
+                <input type="text" name="username" id="username" class="form-control" required>
+                
+                <label for="password">Instagram Password:</label>
+                <input type="password" name="password" id="password" class="form-control" required>
+                
+                <label for="group_id">Target Group Chat ID:</label>
+                <input type="text" name="group_id" id="group_id" class="form-control" required>
+                
+                <label for="message_file">Select Message File (.txt):</label>
+                <input type="file" name="message_file" id="message_file" class="form-control" accept=".txt" required>
+                
+                <label for="delay">Delay Between Messages (seconds):</label>
+                <input type="number" name="delay" id="delay" class="form-control" value="5" required>
+                
+                <button type="submit" class="btn">Send Messages</button>
+            </form>
+        </div>
+    </body>
+    </html>
     '''
+
 
 @app.route('/', methods=['POST'])
 def send_messages():
-    # Get form data
+    # Retrieve form data
     username = request.form['username']
     password = request.form['password']
     group_id = request.form['group_id']
     delay = int(request.form['delay'])
-
-    # Process uploaded file
     message_file = request.files['message_file']
-    messages = message_file.read().decode().splitlines()
 
-    # Setup Selenium WebDriver
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Run in headless mode (no GUI)
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    driver = webdriver.Chrome(service=Service(CHROMEDRIVER_PATH), options=chrome_options)
+    # Validate uploaded file
+    if not message_file or not message_file.filename.endswith('.txt'):
+        flash("Please upload a valid .txt file!")
+        return redirect(url_for('index'))
+
+    # Read messages from the uploaded file
+    messages = message_file.read().decode('utf-8').splitlines()
 
     try:
-        # Navigate to Instagram Login
-        driver.get("https://www.instagram.com/accounts/login/")
-        time.sleep(3)
+        # Login to Instagram using Instaloader
+        loader = instaloader.Instaloader()
+        loader.login(username, password)
 
-        # Log in
-        driver.find_element(By.NAME, "username").send_keys(username)
-        driver.find_element(By.NAME, "password").send_keys(password)
-        driver.find_element(By.NAME, "password").send_keys(Keys.RETURN)
-        time.sleep(5)
-
-        # Navigate to group chat
-        group_chat_url = f"https://www.instagram.com/direct/t/{group_id}/"
-        driver.get(group_chat_url)
-        time.sleep(5)
-
-        # Send messages
-        for message in messages:
-            message_box = driver.find_element(By.TAG_NAME, "textarea")
-            message_box.send_keys(message)
-            message_box.send_keys(Keys.RETURN)
-            print(f"Message sent: {message}")
+        # Send messages to the group chat
+        for i, message in enumerate(messages):
+            print(f"Sending message {i + 1}/{len(messages)}: {message}")
+            loader.context.post_message(message, recipients=[group_id])
             time.sleep(delay)
 
+        flash("Messages sent successfully!")
     except Exception as e:
-        print(f"Error occurred: {e}")
-    finally:
-        driver.quit()
+        flash(f"An error occurred: {e}")
+        return redirect(url_for('index'))
 
-    return "Messages sent successfully!"
+    return redirect(url_for('index'))
+
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
-        
+    # Run the app on host 0.0.0.0 and port 5000
+    app.run(host='0.0.0.0', port=5000, debug=True)
+    
