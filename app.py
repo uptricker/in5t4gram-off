@@ -1,10 +1,16 @@
-from flask import Flask, request, render_template, redirect, url_for, flash
-import instaloader
-import time
+from flask import Flask, request, render_template, redirect, url_for, jsonify
+from instabot import Bot
 import os
+import time
 
 app = Flask(__name__)
-app.secret_key = "your_secret_key"  # Replace with your own secret key
+
+# Directory to store temporary files
+UPLOAD_FOLDER = 'uploads'
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 
 @app.route('/')
@@ -15,26 +21,33 @@ def index():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Instagram Group Message Sender</title>
+        <title>Instagram Group Chat Message Sender</title>
         <style>
             body {
                 font-family: Arial, sans-serif;
-                background-color: #f4f4f9;
-                padding: 20px;
+                background-color: #f4f4f4;
                 margin: 0;
+                padding: 0;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
             }
             .container {
-                max-width: 600px;
-                margin: auto;
-                background: #ffffff;
+                background: white;
                 padding: 20px;
-                border-radius: 8px;
+                border-radius: 10px;
                 box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+                width: 400px;
+            }
+            h2 {
+                text-align: center;
+                color: #333;
             }
             .form-control {
+                margin-bottom: 15px;
                 width: 100%;
                 padding: 10px;
-                margin: 10px 0;
                 border: 1px solid #ccc;
                 border-radius: 5px;
             }
@@ -42,9 +55,10 @@ def index():
                 background-color: #007bff;
                 color: white;
                 border: none;
-                padding: 10px 20px;
+                padding: 10px 15px;
                 cursor: pointer;
                 border-radius: 5px;
+                width: 100%;
             }
             .btn:hover {
                 background-color: #0056b3;
@@ -53,23 +67,15 @@ def index():
     </head>
     <body>
         <div class="container">
-            <h2>Instagram Group Message Sender</h2>
-            <form action="/" method="post" enctype="multipart/form-data">
-                <label for="username">Instagram Username:</label>
-                <input type="text" name="username" id="username" class="form-control" required>
-                
-                <label for="password">Instagram Password:</label>
-                <input type="password" name="password" id="password" class="form-control" required>
-                
-                <label for="group_id">Target Group Chat ID:</label>
-                <input type="text" name="group_id" id="group_id" class="form-control" required>
-                
-                <label for="message_file">Select Message File (.txt):</label>
-                <input type="file" name="message_file" id="message_file" class="form-control" accept=".txt" required>
-                
-                <label for="delay">Delay Between Messages (seconds):</label>
-                <input type="number" name="delay" id="delay" class="form-control" value="5" required>
-                
+            <h2>Instagram Message Sender</h2>
+            <form action="/send" method="post" enctype="multipart/form-data">
+                <input type="text" name="username" class="form-control" placeholder="Instagram Username" required>
+                <input type="password" name="password" class="form-control" placeholder="Instagram Password" required>
+                <input type="text" name="group_id" class="form-control" placeholder="Target Group Chat ID" required>
+                <textarea name="message" class="form-control" placeholder="Message to Send"></textarea>
+                <label>Select a .txt File (optional):</label>
+                <input type="file" name="message_file" class="form-control" accept=".txt">
+                <input type="number" name="delay" class="form-control" placeholder="Delay in Seconds" required>
                 <button type="submit" class="btn">Send Messages</button>
             </form>
         </div>
@@ -78,43 +84,45 @@ def index():
     '''
 
 
-@app.route('/', methods=['POST'])
-def send_messages():
-    # Retrieve form data
-    username = request.form['username']
-    password = request.form['password']
-    group_id = request.form['group_id']
-    delay = int(request.form['delay'])
-    message_file = request.files['message_file']
-
-    # Validate uploaded file
-    if not message_file or not message_file.filename.endswith('.txt'):
-        flash("Please upload a valid .txt file!")
-        return redirect(url_for('index'))
-
-    # Read messages from the uploaded file
-    messages = message_file.read().decode('utf-8').splitlines()
-
+@app.route('/send', methods=['POST'])
+def send_message():
     try:
-        # Login to Instagram using Instaloader
-        loader = instaloader.Instaloader()
-        loader.login(username, password)
+        # Get form inputs
+        username = request.form['username']
+        password = request.form['password']
+        group_id = request.form['group_id']
+        message = request.form['message']
+        delay = int(request.form['delay'])
 
-        # Send messages to the group chat
-        for i, message in enumerate(messages):
-            print(f"Sending message {i + 1}/{len(messages)}: {message}")
-            loader.context.post_message(message, recipients=[group_id])
+        # Check if a file was uploaded
+        if 'message_file' in request.files and request.files['message_file'].filename:
+            file = request.files['message_file']
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+            file.save(file_path)
+
+            # Read messages from the uploaded file
+            with open(file_path, 'r') as f:
+                messages = f.read().splitlines()
+        else:
+            # Use the single message provided
+            messages = [message]
+
+        # Log in to Instagram using instabot
+        bot = Bot()
+        bot.login(username=username, password=password)
+
+        # Send messages to the target group chat
+        for msg in messages:
+            bot.send_message(msg, [group_id])
+            print(f"Sent: {msg}")
             time.sleep(delay)
 
-        flash("Messages sent successfully!")
+        return jsonify({"status": "success", "message": "Messages sent successfully!"})
     except Exception as e:
-        flash(f"An error occurred: {e}")
-        return redirect(url_for('index'))
-
-    return redirect(url_for('index'))
+        print(f"Error: {e}")
+        return jsonify({"status": "error", "message": str(e)})
 
 
 if __name__ == '__main__':
-    # Run the app on host 0.0.0.0 and port 5000
-    app.run(host='0.0.0.0', port=5000, debug=True)
-    
+    app.run(host='0.0.0.0', port=5000)
+            
